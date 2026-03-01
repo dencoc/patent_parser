@@ -29,14 +29,17 @@ npm install playwright csv-parser yargs dotenv
 npx playwright install chromium
 
 ## Запуск
-# 1. Всё из .env
-node parser_patents_fast.js
+# 1. Создаём образы и запускаем
+docker compose up --build
 
-# 2. Переопределить только некоторые параметры
-node parser_patents_fast.js --concurrency 15 --keywords "турбонаддув,впрыск"
+# 2. Только один раз — посмотреть логи
+docker compose logs -f parser
 
-# 3. Использовать другой CSV-файл
-node parser_patents_fast.js --input another_patents.csv
+# 3. Запустить в фоне
+docker compose up -d
 
-# 4. Максимальная скорость
-node parser_patents_fast.js --concurrency 18
+# 4. Остановить
+docker compose down
+
+# 5. Очистить volume с данными БД (если нужно сбросить)
+docker compose down -v

@@ -6,6 +6,7 @@ const csv = require('csv-parser');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const { chromium } = require('playwright');
+const db = require('./db');
 
 const argv = yargs(hideBin(process.argv))
   .option('input', { alias: 'i', type: 'string', default: process.env.INPUT_FILE })
@@ -26,6 +27,10 @@ const KEYWORDS = argv.keywords
   ? argv.keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean)
   : [];
 const CONCURRENCY = Math.max(1, Math.min(30, argv.concurrency));
+if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
+  console.error('Ошибка: не заданы параметры PostgreSQL в .env');
+  process.exit(1);
+}
 
 if (!fs.existsSync(FOLDER)) {
   fs.mkdirSync(FOLDER, { recursive: true });
@@ -112,9 +117,9 @@ async function processPatent(row) {
   const id = (row.id || '').trim();
   if (!id) return;
 
-  const filePath = path.join(FOLDER, `${id}.json`);
-  if (fs.existsSync(filePath)) {
-    console.log(`[${id}] Уже существует → пропуск`);
+  // Проверяем существование в БД (вместо проверки файла)
+  if (await db.patentExists(id)) {
+    console.log(`[${id}] Уже существует в БД → пропуск`);
     return;
   }
 
@@ -131,11 +136,13 @@ async function processPatent(row) {
     return;
   }
 
+  console.log(`[${id}] Парсим → ${link}`);
   const data = await extractPatent(link, id);
 
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  // Сохраняем в PostgreSQL
+  await db.savePatent(id, data);
 
-  console.log(`[${id}] Сохранено → ${filePath}`);
+  console.log(`[${id}] Сохранено в БД`);
   if (data.abstract)    console.log(`   Abstract:    ${data.abstract.substring(0, 80)}...`);
   if (data.claims)      console.log(`   Claims:      ${data.claims.substring(0, 80)}...`);
   if (data.description) console.log(`   Description: ${data.description.substring(0, 80)}...`);
@@ -169,6 +176,31 @@ class Semaphore {
 async function main() {
   const patents = [];
 
+  try {
+    await db.pool.query(`
+      CREATE TABLE IF NOT EXISTS patents (
+        patent_id       VARCHAR(50) PRIMARY KEY,
+        abstract        TEXT,
+        claims          TEXT,
+        description     TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log('Таблица patents проверена/создана');
+  } catch (err) {
+    console.error('Ошибка при создании таблицы patents:', err.message);
+    process.exit(1);
+  }
+
+  try {
+    await db.pool.query('SELECT 1');
+    console.log('PostgreSQL подключение успешно');
+  } catch (err) {
+    console.error('Ошибка подключения к PostgreSQL:', err.message);
+    process.exit(1);
+  }
+
   await new Promise((resolve, reject) => {
     fs.createReadStream(INPUT_FILE)
       .pipe(csv())
@@ -178,6 +210,7 @@ async function main() {
   });
 
   console.log(`📋 Загружено патентов: ${patents.length}`);
+  console.log(`Сохраняем в PostgreSQL (база: ${process.env.DATABASE_URL || process.env.DB_NAME || '???'} )`);
 
   const semaphore = new Semaphore(CONCURRENCY);
   let completed = 0;
@@ -197,10 +230,12 @@ async function main() {
   await Promise.all(promises);
 
   console.log('🎉 Парсинг завершён!');
+  await db.close();
   await closeBrowser();
 }
 
-main().catch(err => {
+main().catch(async err => {
   console.error('Критическая ошибка:', err);
-  closeBrowser();
+  await db.close().catch(() => {});
+  await closeBrowser();
 });
