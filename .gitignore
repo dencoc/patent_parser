@@ -1,0 +1,74 @@
+# .gitignore
+
+# Зависимости
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Окружение и секреты
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Логи и временные файлы
+*.log
+*.logs
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Сгенерированные данные и результаты парсинга
+extracted_patents/
+output/
+data/
+patents/
+raw_html/
+debug_screenshots/
+debug/
+*.jsonl
+*.ndjson
+
+# Временные файлы редакторов и IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Сборочные артефакты (если будете делать бандл)
+dist/
+build/
+out/
+
+# Тесты и покрытие
+coverage/
+.nyc_output/
+
+# Playwright (кэш браузеров, если не хотите коммитить)
+playwright/.cache/
+test-results/
+playwright-report/
+
+# Случайные файлы, которые часто появляются
+*.bak
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Если используете Jupyter или эксперименты
+.ipynb_checkpoints/
+*.ipynb
+
+# Кэш и индексы поиска
+.search/
